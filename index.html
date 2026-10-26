@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emotion Diamond — 感情の輝き</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="stage"></div>
+
+  <video id="camera" autoplay playsinline muted></video>
+
+  <div id="panel">
+    <h1>Emotion Diamond</h1>
+    <div class="meter" data-emotion="joy">
+      <span class="label">喜び</span>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+    <div class="meter" data-emotion="surprise">
+      <span class="label">驚き</span>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+    <div class="meter" data-emotion="anger">
+      <span class="label">怒り</span>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+    <div class="meter" data-emotion="sadness">
+      <span class="label">悲しみ</span>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+  </div>
+
+  <div id="mood"></div>
+  <div id="status"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
