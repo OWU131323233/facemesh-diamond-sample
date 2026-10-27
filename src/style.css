@@ -60,6 +60,21 @@ body {
   margin-bottom: 10px;
 }
 
+#voice-toggle {
+  padding: 5px 8px;
+  border: 1px solid #65758f;
+  border-radius: 4px;
+  background: #182235;
+  color: inherit;
+  cursor: pointer;
+}
+
+#voice-status {
+  margin: 8px 0 14px;
+  font-size: 11px;
+  color: #aeb9cf;
+}
+
 .meter .label {
   width: 3.5em;
   font-size: 12px;
@@ -85,6 +100,8 @@ body {
 .meter[data-emotion="surprise"] .fill { background: #f4f7ff; }
 .meter[data-emotion="anger"] .fill    { background: #ff4b3e; }
 .meter[data-emotion="sadness"] .fill  { background: #4f7fff; }
+.meter[data-emotion="neutral"] .fill  { background: #bfe0ff; }
+.meter[data-emotion="neutral"] .label { width: auto; white-space: nowrap; }
 
 #mood {
   position: fixed;

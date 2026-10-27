@@ -13,6 +13,8 @@
 
   <div id="panel">
     <h1>Emotion Diamond</h1>
+    <button id="voice-toggle" type="button">音声を有効にする</button>
+    <p id="voice-status" aria-live="polite">顔のみで推定中</p>
     <div class="meter" data-emotion="joy">
       <span class="label">喜び</span>
       <div class="bar"><div class="fill"></div></div>
@@ -27,6 +29,10 @@
     </div>
     <div class="meter" data-emotion="sadness">
       <span class="label">悲しみ</span>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+    <div class="meter" data-emotion="neutral">
+      <span class="label">無表情（平常）</span>
       <div class="bar"><div class="fill"></div></div>
     </div>
   </div>

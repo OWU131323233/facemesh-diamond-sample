@@ -1,5 +1,5 @@
 // MediaPipe Face Landmarker のブレンドシェイプ(52種)から
-// 4つの基本感情スコア (0〜1) を推定する。
+// 4つの基本感情と無表情（平常）のスコア (0〜1) を推定する。
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -8,17 +8,25 @@ const SMOOTHING = 0.15;
 
 export class EmotionEstimator {
   constructor() {
-    this.scores = { joy: 0, surprise: 0, anger: 0, sadness: 0 };
+    this.scores = { joy: 0, surprise: 0, anger: 0, sadness: 0, neutral: 1 };
   }
 
   /**
    * @param {object|null} blendshapes FaceLandmarkerResult.faceBlendshapes[0]
    *   顔が検出されなかったフレームは null を渡すと中立へ戻っていく。
+   * @param {number} voiceActivity 音声による補正の強さ (0〜1)。未使用時は0。
    */
-  update(blendshapes) {
+  update(blendshapes, voiceActivity = 0) {
     const raw = blendshapes
       ? this._estimate(blendshapes)
       : { joy: 0, surprise: 0, anger: 0, sadness: 0 };
+
+    // 音声は感情の種類を決めず、表情の強さを最大30%補正する。
+    const voiceGain = 1 + clamp01(voiceActivity) * 0.3;
+    for (const key of Object.keys(raw)) raw[key] = clamp01(raw[key] * voiceGain);
+
+    // 他の感情が弱いほど、無表情（平常）のスコアを高くする。
+    raw.neutral = 1 - Math.max(...Object.values(raw));
 
     for (const key of Object.keys(this.scores)) {
       this.scores[key] += (raw[key] - this.scores[key]) * SMOOTHING;
@@ -53,7 +61,7 @@ export class EmotionEstimator {
     let best = "neutral";
     let bestScore = threshold;
     for (const [key, score] of Object.entries(this.scores)) {
-      if (score > bestScore) {
+      if (key !== "neutral" && score > bestScore) {
         best = key;
         bestScore = score;
       }
@@ -67,5 +75,5 @@ export const MOOD_LABELS = {
   surprise: "ハッとした空気",
   anger: "張りつめた空気",
   sadness: "沈んだ空気",
-  neutral: "穏やかな空気",
+  neutral: "無表情（平常）",
 };

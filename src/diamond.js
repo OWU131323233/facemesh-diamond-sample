@@ -176,6 +176,17 @@ export class DiamondScene {
     this.surfaceColor = new THREE.Color();
     this.flashColor = new THREE.Color();
     this.emissiveColor = new THREE.Color();
+    this.diamonds = [{
+      diamond: this.diamond,
+      geometry: this.geometry,
+      material: this.material,
+      sparkles: this.sparkles,
+      sparkleColor: this.sparkleColor,
+      targetColor: this.targetColor,
+      surfaceColor: this.surfaceColor,
+      flashColor: this.flashColor,
+      emissiveColor: this.emissiveColor,
+    }];
     this.elapsed = 0;
 
     this._resize();
@@ -190,8 +201,8 @@ export class DiamondScene {
     this.camera.updateProjectionMatrix();
   }
 
-  _applyEmotionShape(dt, e, t) {
-    const positionAttr = this.geometry.getAttribute("position");
+  _applyEmotionShape(dt, e, t, geometry) {
+    const positionAttr = geometry.getAttribute("position");
     const positions = positionAttr.array;
     const response = Math.min(1, 0.08 + dt * 7.5);
 
@@ -250,44 +261,50 @@ export class DiamondScene {
     }
 
     positionAttr.needsUpdate = true;
-    this.geometry.computeVertexNormals();
+    geometry.computeVertexNormals();
   }
 
   /**
    * @param {number} dt 前フレームからの秒数
-   * @param {{joy:number,surprise:number,anger:number,sadness:number}} e
+   * @param {Array<{joy:number,surprise:number,anger:number,sadness:number,neutral:number}>} faceScores
    * @param {number} faceCount 検出した顔の数
    */
-  update(dt, e, faceCount = 1) {
+  update(dt, faceScores, faceCount = faceScores.length) {
     this.elapsed += dt;
-    const t = this.elapsed;
+    this._syncDiamonds(faceCount);
+    this.diamonds.forEach((state, index) => {
+      this._updateDiamond(dt, faceScores[index], this.elapsed, state, index === 0);
+    });
+    this.renderer.render(this.scene, this.camera);
+  }
 
+  _updateDiamond(dt, e, t, state, updateLights) {
     // 感情の強さ(覚醒度)と、最も強い感情の色
     const arousal = Math.min(1, e.joy + e.surprise * 1.2 + e.anger * 1.1);
 
     let dominant = "neutral";
     let bestScore = 0.18; // 感情ラベルと同じ中立判定の閾値
     for (const [emotion, score] of Object.entries(e)) {
-      if (score > bestScore) {
+      if (emotion !== "neutral" && score > bestScore) {
         dominant = emotion;
         bestScore = score;
       }
     }
-    this.targetColor.copy(EMOTION_COLORS[dominant]);
+    state.targetColor.copy(EMOTION_COLORS[dominant]);
 
     // 回転: 喜び・驚きで速く、悲しみで遅く。怒りは細かく震える。
     const spin = 0.25 + e.joy * 1.2 + e.surprise * 0.8 - e.sadness * 0.18;
-    this.diamond.rotation.y += spin * dt;
-    this.diamond.rotation.x =
+    state.diamond.rotation.y += spin * dt;
+    state.diamond.rotation.x =
       Math.sin(t * 0.6) * 0.08 + (Math.random() - 0.5) * e.anger * 0.06;
-    this.diamond.rotation.z = (Math.random() - 0.5) * e.anger * 0.06;
+    state.diamond.rotation.z = (Math.random() - 0.5) * e.anger * 0.06;
 
     // 鼓動のようなスケール。覚醒度が高いほど速く大きく脈打つ。
     const pulse = 1 + Math.sin(t * (1.5 + arousal * 6)) * (0.01 + arousal * 0.04);
-    this.diamond.scale.setScalar(pulse);
+    state.diamond.scale.setScalar(pulse);
 
     // 形状: 感情によって輪郭が変形する
-    this._applyEmotionShape(dt, e, t);
+    this._applyEmotionShape(dt, e, t, state.geometry);
 
     // 明るさ: 悲しみで沈み、覚醒で輝く
     const brightness = 1 + arousal * 1.6 - e.sadness * 0.7;
@@ -297,43 +314,45 @@ export class DiamondScene {
     const sweep = Math.sin(t * (1.2 + e.joy * 1.5) + e.anger * 0.8);
     const flash = brightness + shimmer * 1.8;
 
-    this.flashColor.copy(this.targetColor).offsetHSL(
+    state.flashColor.copy(state.targetColor).offsetHSL(
       e.joy * 0.045 + e.surprise * 0.09 - e.anger * 0.075 - e.sadness * 0.03,
       0.12 + e.joy * 0.2 + e.surprise * 0.28 + e.anger * 0.08,
       0.05 + shimmer * 0.16 + e.joy * 0.07 + e.surprise * 0.1
     );
-    this.surfaceColor
-      .copy(this.targetColor)
-      .lerp(this.flashColor, Math.min(1, 0.28 + shimmer * 0.68 + e.surprise * 0.14));
-    this.emissiveColor
-      .copy(this.flashColor)
+    state.surfaceColor
+      .copy(state.targetColor)
+      .lerp(state.flashColor, Math.min(1, 0.28 + shimmer * 0.68 + e.surprise * 0.14));
+    state.emissiveColor
+      .copy(state.flashColor)
       .offsetHSL(
         e.surprise * 0.025 - e.anger * 0.02,
         0.06 + e.surprise * 0.08,
         0.04 + shimmer * 0.12
       );
 
-    this.material.color.lerp(this.surfaceColor, 0.2);
-    this.material.emissive.lerp(this.emissiveColor, 0.24);
-    this.sparkleColor.lerp(this.flashColor, 0.24);
+    state.material.color.lerp(state.surfaceColor, 0.2);
+    state.material.emissive.lerp(state.emissiveColor, 0.24);
+    state.sparkleColor.lerp(state.flashColor, 0.24);
 
-    this.material.envMapIntensity = Math.max(0.45, 1.25 * flash);
-    this.material.emissiveIntensity = 0.03 + shimmer * 0.18 + e.surprise * 0.08;
-    this.keyLight.intensity = Math.max(6, 22 * brightness + shimmer * 26);
-    this.rimLight.intensity = Math.max(4, 9 + brightness * 5 + shimmer * 10);
-    this.glintLight.intensity = 10 + arousal * 26 + shimmer * 65;
-    this.glintLight.position.set(
-      Math.cos(t * 1.8 + e.surprise * 1.5) * (2.1 + e.joy * 0.8),
-      0.7 + Math.sin(t * 2.4) * 0.9,
-      2.2 + sweep * 1.6
-    );
+    state.material.envMapIntensity = Math.max(0.45, 1.25 * flash);
+    state.material.emissiveIntensity = 0.03 + shimmer * 0.18 + e.surprise * 0.08;
+    if (updateLights) {
+      this.keyLight.intensity = Math.max(6, 22 * brightness + shimmer * 26);
+      this.rimLight.intensity = Math.max(4, 9 + brightness * 5 + shimmer * 10);
+      this.glintLight.intensity = 10 + arousal * 26 + shimmer * 65;
+      this.glintLight.position.set(
+        Math.cos(t * 1.8 + e.surprise * 1.5) * (2.1 + e.joy * 0.8),
+        0.7 + Math.sin(t * 2.4) * 0.9,
+        2.2 + sweep * 1.6
+      );
+    }
 
     // きらめき: 喜び・驚きで増え、怒りは鋭く速い点滅
     const sparkleLevel =
       0.16 + e.joy * 1.0 + e.surprise * 1.15 + e.anger * 0.55 - e.sadness * 0.08;
     const flickerSpeed = 1.2 + e.anger * 3.6 + e.surprise * 2.1 + e.joy * 0.8;
     const burstLevel = Math.max(0, Math.sin(t * (8 + e.surprise * 10) + arousal * 3));
-    for (const s of this.sparkles) {
+    for (const s of state.sparkles) {
       const { phase, speed, size, burst } = s.userData;
       const wave = Math.sin(t * speed * flickerSpeed + phase);
       const twinkleBase = Math.pow(Math.max(0, wave), 8) * Math.min(1, sparkleLevel);
@@ -341,22 +360,41 @@ export class DiamondScene {
         Math.pow(burstLevel, 10) * burst * (0.2 + e.surprise * 0.9 + e.joy * 0.35);
       const twinkle = Math.min(1.35, twinkleBase * (1.2 + shimmer) + burstFlash);
       s.material.opacity = Math.min(1, twinkle);
-      s.material.color.copy(this.sparkleColor);
+      s.material.color.copy(state.sparkleColor);
       s.scale.setScalar(size * (0.45 + twinkle * 1.9));
     }
-
-    this._syncDiamonds(faceCount);
-    this.renderer.render(this.scene, this.camera);
   }
 
   _syncDiamonds(faceCount) {
     this.diamondGroup.visible = faceCount > 0;
     const count = Math.max(1, faceCount);
     while (this.diamondGroup.children.length < count) {
-      this.diamondGroup.add(this.diamond.clone());
+      const diamond = this.diamond.clone();
+      diamond.geometry = this.geometry.clone();
+      diamond.material = this.material.clone();
+      const sparkles = diamond.children;
+      sparkles.forEach((sparkle) => {
+        sparkle.material = sparkle.material.clone();
+      });
+      this.diamondGroup.add(diamond);
+      this.diamonds.push({
+        diamond,
+        geometry: diamond.geometry,
+        material: diamond.material,
+        sparkles,
+        sparkleColor: this.sparkleColor.clone(),
+        targetColor: this.targetColor.clone(),
+        surfaceColor: this.surfaceColor.clone(),
+        flashColor: this.flashColor.clone(),
+        emissiveColor: this.emissiveColor.clone(),
+      });
     }
     while (this.diamondGroup.children.length > count) {
-      this.diamondGroup.remove(this.diamondGroup.children.at(-1));
+      const state = this.diamonds.pop();
+      this.diamondGroup.remove(state.diamond);
+      state.geometry.dispose();
+      state.material.dispose();
+      state.sparkles.forEach((sparkle) => sparkle.material.dispose());
     }
 
     // 複数人のときは、全てのダイヤが画面内に収まるよう横に並べる。
@@ -366,12 +404,6 @@ export class DiamondScene {
     );
     this.diamondGroup.children.forEach((diamond, index) => {
       diamond.position.x = (index - (count - 1) / 2) * 2.8;
-      if (diamond === this.diamond) return;
-      diamond.rotation.copy(this.diamond.rotation);
-      diamond.scale.copy(this.diamond.scale);
-      diamond.children.forEach((sparkle, i) => {
-        sparkle.scale.copy(this.sparkles[i].scale);
-      });
     });
   }
 }
